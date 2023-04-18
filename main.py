@@ -55,11 +55,11 @@ def create_df(folder):
 
 
 def show_cam(data_frame):
-    data_frame = data_frame.groupby(['camera']).size()
+    data_frame = data_frame.groupby(['camera']).size().sort_values(ascending=False)
 
     fig_cam, axs_cam = plt.subplots(figsize=[WIDTH,HEIGHT])
-    data_frame.plot.bar(ax=axs_cam, title="Photos by Camera", rot=0)
-
+    cam = data_frame.plot.bar(ax=axs_cam, title="Photos by Camera", rot=0)
+    cam.bar_label(cam.containers[0])
 
 # instantiates argument parser
 parser = argparse.ArgumentParser()
