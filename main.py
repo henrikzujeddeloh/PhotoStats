@@ -7,6 +7,8 @@ import seaborn as sns
 from tabulate import tabulate
 from PIL import Image, ExifTags
 from pillow_heif import register_heif_opener
+from progressbar import ProgressBar, Percentage, Bar, ETA
+
 
 # set dimensiouns of visualizations
 WIDTH = 10
@@ -29,8 +31,14 @@ def create_df(folder):
     # creates pandas DatFrame with relevant columns
     data_frame = pd.DataFrame(columns=('photo', 'capture_date', 'camera'))
     
+    # total number of photos to scan
+    total_photos = 0
+    for root, dirs, files in os.walk(folder):
+        total_photos += len(files)
+
     # loop through all directories and subdirectories
     i = 0
+    pbar = ProgressBar(widgets=["Reading photos", Percentage(), Bar(), ETA()], maxval=total_photos).start()
     for subdir, dirs, files in os.walk(folder):
         for filename in files:
             # ignores hidden files and files in ignore list
@@ -50,21 +58,40 @@ def create_df(folder):
                         camera = get_field(img_exif, 'Model')
                         data_frame.loc[i] = [filename, capture_date, camera]
                         i +=1
+                        pbar.update(i)
+    pbar.finish()
     return data_frame
 
 
 
 def show_cam(data_frame):
+    # adds new column with number of pictures taken for each camera
     data_frame = data_frame.groupby(['camera']).size().sort_values(ascending=False)
 
     fig_cam, axs_cam = plt.subplots(figsize=[WIDTH,HEIGHT])
     cam = data_frame.plot.bar(ax=axs_cam, title="Photos by Camera", rot=0)
     cam.bar_label(cam.containers[0])
 
+def show_date(data_frame):
+
+    data_frame['date'] = data_frame['capture_date'].dt.date
+
+    data_frame = data_frame.groupby(['date', 'camera']).size().unstack()
+
+    # fill empty dates with 0
+    min_date = pd.to_datetime(data_frame.index).min()
+    max_date = pd.to_datetime(data_frame.index).max()
+    date_range = pd.date_range(min_date, max_date)
+    data_frame = data_frame.reindex(date_range).fillna(0)
+    
+    plt_date, axs_date = plt.subplots(figsize=[WIDTH, HEIGHT])
+    data_frame.plot(kind='line', ax=axs_date)
+
 # instantiates argument parser
 parser = argparse.ArgumentParser()
 parser.add_argument("folder_path", help="path to photos directory which should be scanned")
 parser.add_argument("--cam", help="output number of photos by camera", action="store_true")
+parser.add_argument("--date", help="output photos taken by camera per day", action="store_true")
 args = parser.parse_args()
 
 # function to open HEIF files
@@ -76,9 +103,10 @@ df = create_df(args.folder_path)
 if args.cam:
     show_cam(df)
 
+if args.date:
+    show_date(df)
 
 
-print(df)
 print(df.info(memory_usage='deep'))
 
 plt.show()
